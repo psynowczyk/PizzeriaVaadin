@@ -2,6 +2,8 @@ package war;
 
 import javax.servlet.annotation.WebServlet;
 
+import com.mongodb.MongoClient;
+import com.mongodb.client.MongoDatabase;
 import com.vaadin.annotations.Theme;
 import com.vaadin.annotations.VaadinServletConfiguration;
 import com.vaadin.annotations.Widgetset;
@@ -33,26 +35,38 @@ import com.vaadin.navigator.ViewChangeListener.ViewChangeEvent;
 @Widgetset("war.MyAppWidgetset")
 public class MyUI extends UI {
 	
+	MongoClient mongoClient = new MongoClient("localhost", 27017);
+	MongoDatabase db = mongoClient.getDatabase("pv");
 	Navigator navigator;
 	
 	// Home view with a menu
 	public class HomeView extends VerticalLayout implements View {
-		Panel LeftPanel;
+		Panel LeftPanel, RightPanel;
 		Button homebutton, orderbutton, ordersbutton;
+		Double OrderPrice = 0.0;
+		Container OrderContainer = new IndexedContainer();
+
 		// Menu navigation button listener
 		class ButtonListener implements Button.ClickListener {
 			String menuitem;
-			public ButtonListener(String menuitem) {
-				this.menuitem = menuitem;
-			}
+			public ButtonListener(String menuitem) {this.menuitem = menuitem;}
 			@Override
 			public void buttonClick(ClickEvent event) {navigator.navigateTo("/" + menuitem);}
 		}
+		class PriceButtonListener implements Button.ClickListener {
+			Double price;
+			public PriceButtonListener(Double price) {this.price = price;}
+			@Override
+			public void buttonClick(ClickEvent event) {OrderPrice = OrderPrice + price;}
+		}
 		public HomeView() {
 			setSizeFull();
+			OrderContainer.addContainerProperty("pizzaname", String.class, "none");
+			OrderContainer.addContainerProperty("pizzaprice", Button.class, null);
 			// Layout with menu on top and view area on below
 			VerticalLayout vLayout = new VerticalLayout();
 			HorizontalLayout menu = new HorizontalLayout();
+			HorizontalLayout panels = new HorizontalLayout();
 			menu.setStyleName("main-menu");
 			homebutton = new Button("Home", new ButtonListener("home"));
 			orderbutton = new Button("Order", new ButtonListener("order"));
@@ -65,7 +79,15 @@ public class MyUI extends UI {
 			LeftPanel = new Panel("");
 			LeftPanel.setStyleName("left-panel");
 			LeftPanel.setWidth("");
-			vLayout.addComponent(LeftPanel);
+			RightPanel = new Panel("");
+			RightPanel.setStyleName("right-panel");
+			RightPanel.setWidth("");
+			panels.addComponent(LeftPanel);
+			panels.addComponent(RightPanel);
+			panels.setExpandRatio(LeftPanel, 2);
+			panels.setExpandRatio(RightPanel, 1);
+			panels.setWidth("100%");
+			vLayout.addComponent(panels);
 			addComponent(vLayout);
 		}
 		
@@ -74,6 +96,9 @@ public class MyUI extends UI {
 			VerticalLayout LeftPanelContent = new VerticalLayout();
 			LeftPanelContent.setSizeFull();
 			LeftPanel.setContent(LeftPanelContent); // Also clears
+			VerticalLayout RightPanelContent = new VerticalLayout();
+			RightPanelContent.setSizeFull();
+			RightPanel.setContent(RightPanelContent); // Also clears
 			if (event.getParameters() == null || event.getParameters().isEmpty() || event.getParameters().equals("home")) {
 				homebutton.setStyleName("active-button");
 				orderbutton.setStyleName("");
@@ -89,32 +114,38 @@ public class MyUI extends UI {
 				Container pizzacontainer = new IndexedContainer();
 				pizzacontainer.addContainerProperty("pizzaname", String.class, "none");
 				pizzacontainer.addContainerProperty("pizzaing", String.class, "none");
-				pizzacontainer.addContainerProperty("pizzaprice1", Double.class, 0.0);
-				pizzacontainer.addContainerProperty("pizzaprice2", Double.class, 0.0);
+				pizzacontainer.addContainerProperty("pizzaprice1", Button.class, null);
+				pizzacontainer.addContainerProperty("pizzaprice2", Button.class, null);
 				Table pizzatable = new Table();
 				pizzatable.setSizeFull();
 				
 				Item itemId = pizzacontainer.addItem("1");
 				itemId.getItemProperty("pizzaname").setValue("Margherita");
 				itemId.getItemProperty("pizzaing").setValue("Sos pomidorowy, Ser, Oregano");
-				itemId.getItemProperty("pizzaprice1").setValue(22.9);
-				itemId.getItemProperty("pizzaprice2").setValue(27.9);
+				Button pricebutton = new Button("22.9", new PriceButtonListener(22.9));
+				itemId.getItemProperty("pizzaprice1").setValue(pricebutton);
+				pricebutton = new Button("27.9");
+				itemId.getItemProperty("pizzaprice2").setValue(pricebutton);
 				itemId = pizzacontainer.addItem("2");
 				itemId.getItemProperty("pizzaname").setValue("Soprano");
 				itemId.getItemProperty("pizzaing").setValue("Sos pomidorowy, Ser, Pieczarki");
-				itemId.getItemProperty("pizzaprice1").setValue(24.9);
-				itemId.getItemProperty("pizzaprice2").setValue(31.9);
+				pricebutton = new Button("24.9");
+				itemId.getItemProperty("pizzaprice1").setValue(pricebutton);
+				pricebutton = new Button("31.9");
+				itemId.getItemProperty("pizzaprice2").setValue(pricebutton);
 				itemId = pizzacontainer.addItem("3");
 				itemId.getItemProperty("pizzaname").setValue("Vesuvio");
 				itemId.getItemProperty("pizzaing").setValue("Sos pomidorowy, Ser, Szynka");
-				itemId.getItemProperty("pizzaprice1").setValue(25.9);
-				itemId.getItemProperty("pizzaprice2").setValue(33.9);
+				pricebutton = new Button("25.9");
+				itemId.getItemProperty("pizzaprice1").setValue(pricebutton);
+				pricebutton = new Button("33.9");
+				itemId.getItemProperty("pizzaprice2").setValue(pricebutton);
 				
 				pizzatable.setContainerDataSource(pizzacontainer);
 				pizzatable.setColumnHeaders(new String[] { "Nazwa", "Składniki", "Cena 40cm", "Cena 50cm" });
 				pizzatable.setPageLength(3);
-				pizzatable.setWidth("100%");
 				LeftPanelContent.addComponent(pizzatable);
+				RightPanelContent.addComponent(new Label("Wartość zamówienia: " + OrderPrice));
 				return;
 			}
 			else if (event.getParameters().equals("orders")) {
