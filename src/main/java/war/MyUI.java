@@ -5,6 +5,9 @@ import javax.servlet.annotation.WebServlet;
 import com.vaadin.annotations.Theme;
 import com.vaadin.annotations.VaadinServletConfiguration;
 import com.vaadin.annotations.Widgetset;
+import com.vaadin.data.Container;
+import com.vaadin.data.Item;
+import com.vaadin.data.util.IndexedContainer;
 import com.vaadin.server.ThemeResource;
 import com.vaadin.server.VaadinRequest;
 import com.vaadin.server.VaadinServlet;
@@ -16,6 +19,7 @@ import com.vaadin.ui.HorizontalLayout;
 import com.vaadin.ui.Label;
 import com.vaadin.ui.Notification;
 import com.vaadin.ui.Panel;
+import com.vaadin.ui.Table;
 import com.vaadin.ui.UI;
 import com.vaadin.ui.VerticalLayout;
 import com.vaadin.navigator.Navigator;
@@ -34,6 +38,7 @@ public class MyUI extends UI {
 	// Home view with a menu
 	public class HomeView extends VerticalLayout implements View {
 		Panel LeftPanel;
+		Button homebutton, orderbutton, ordersbutton;
 		// Menu navigation button listener
 		class ButtonListener implements Button.ClickListener {
 			String menuitem;
@@ -49,11 +54,12 @@ public class MyUI extends UI {
 			VerticalLayout vLayout = new VerticalLayout();
 			HorizontalLayout menu = new HorizontalLayout();
 			menu.setStyleName("main-menu");
-			Button homebutton = new Button("Home", new ButtonListener("home"));
-			homebutton.setStyleName("active-button");
+			homebutton = new Button("Home", new ButtonListener("home"));
+			orderbutton = new Button("Order", new ButtonListener("order"));
+			ordersbutton = new Button("Orders", new ButtonListener("orders"));
 			menu.addComponent(homebutton);
-			menu.addComponent(new Button("Order", new ButtonListener("order")));
-			menu.addComponent(new Button("Orders", new ButtonListener("orders")));
+			menu.addComponent(orderbutton);
+			menu.addComponent(ordersbutton);
 			vLayout.addComponent(menu);
 			// A panel that contains a content area under menu
 			LeftPanel = new Panel("");
@@ -67,10 +73,55 @@ public class MyUI extends UI {
 		public void enter(ViewChangeEvent event) {
 			VerticalLayout LeftPanelContent = new VerticalLayout();
 			LeftPanelContent.setSizeFull();
-			//LeftPanelContent.setMargin(true);
 			LeftPanel.setContent(LeftPanelContent); // Also clears
-			if (event.getParameters() == null || event.getParameters().isEmpty()) {
-				LeftPanelContent.addComponent(new Label("Nothing to see here, just pass along."));
+			if (event.getParameters() == null || event.getParameters().isEmpty() || event.getParameters().equals("home")) {
+				homebutton.setStyleName("active-button");
+				orderbutton.setStyleName("");
+				ordersbutton.setStyleName("");
+				LeftPanelContent.addComponent(new Label("Projekt Pizzeria Vaadin - Bogaty interfejs użytkownika"));
+				return;
+			}
+			else if (event.getParameters().equals("order")) {
+				orderbutton.setStyleName("active-button");
+				homebutton.setStyleName("");
+				ordersbutton.setStyleName("");
+				
+				Container pizzacontainer = new IndexedContainer();
+				pizzacontainer.addContainerProperty("pizzaname", String.class, "none");
+				pizzacontainer.addContainerProperty("pizzaing", String.class, "none");
+				pizzacontainer.addContainerProperty("pizzaprice1", Double.class, 0.0);
+				pizzacontainer.addContainerProperty("pizzaprice2", Double.class, 0.0);
+				Table pizzatable = new Table();
+				pizzatable.setSizeFull();
+				
+				Item itemId = pizzacontainer.addItem("1");
+				itemId.getItemProperty("pizzaname").setValue("Margherita");
+				itemId.getItemProperty("pizzaing").setValue("Sos pomidorowy, Ser, Oregano");
+				itemId.getItemProperty("pizzaprice1").setValue(22.9);
+				itemId.getItemProperty("pizzaprice2").setValue(27.9);
+				itemId = pizzacontainer.addItem("2");
+				itemId.getItemProperty("pizzaname").setValue("Soprano");
+				itemId.getItemProperty("pizzaing").setValue("Sos pomidorowy, Ser, Pieczarki");
+				itemId.getItemProperty("pizzaprice1").setValue(24.9);
+				itemId.getItemProperty("pizzaprice2").setValue(31.9);
+				itemId = pizzacontainer.addItem("3");
+				itemId.getItemProperty("pizzaname").setValue("Vesuvio");
+				itemId.getItemProperty("pizzaing").setValue("Sos pomidorowy, Ser, Szynka");
+				itemId.getItemProperty("pizzaprice1").setValue(25.9);
+				itemId.getItemProperty("pizzaprice2").setValue(33.9);
+				
+				pizzatable.setContainerDataSource(pizzacontainer);
+				pizzatable.setColumnHeaders(new String[] { "Nazwa", "Składniki", "Cena 40cm", "Cena 50cm" });
+				pizzatable.setPageLength(3);
+				pizzatable.setWidth("100%");
+				LeftPanelContent.addComponent(pizzatable);
+				return;
+			}
+			else if (event.getParameters().equals("orders")) {
+				ordersbutton.setStyleName("active-button");
+				homebutton.setStyleName("");
+				orderbutton.setStyleName("");
+				LeftPanelContent.addComponent(new Label("orders."));
 				return;
 			}
 			/*
