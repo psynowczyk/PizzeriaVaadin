@@ -1,5 +1,8 @@
 package war;
 
+import java.math.BigDecimal;
+import java.util.Currency;
+
 import javax.servlet.annotation.WebServlet;
 
 import com.mongodb.MongoClient;
@@ -43,7 +46,8 @@ public class MyUI extends UI {
 	public class HomeView extends VerticalLayout implements View {
 		Panel LeftPanel, RightPanel;
 		Button homebutton, orderbutton, ordersbutton;
-		Double OrderPrice = 0.0;
+		BigDecimal OrderPrice = new BigDecimal(0.00);
+		Label OrderPriceLabel = new Label("Wartość zamówienia: " + OrderPrice);
 		Container OrderContainer = new IndexedContainer();
 
 		// Menu navigation button listener
@@ -54,10 +58,13 @@ public class MyUI extends UI {
 			public void buttonClick(ClickEvent event) {navigator.navigateTo("/" + menuitem);}
 		}
 		class PriceButtonListener implements Button.ClickListener {
-			Double price;
-			public PriceButtonListener(Double price) {this.price = price;}
+			BigDecimal price;
+			public PriceButtonListener(BigDecimal price) {this.price = price;}
 			@Override
-			public void buttonClick(ClickEvent event) {OrderPrice = OrderPrice + price;}
+			public void buttonClick(ClickEvent event) {
+				OrderPrice = OrderPrice.add(price).setScale(2, BigDecimal.ROUND_HALF_UP);
+				OrderPriceLabel.setValue("Wartość zamówienia: " + OrderPrice);
+			}
 		}
 		public HomeView() {
 			setSizeFull();
@@ -122,30 +129,30 @@ public class MyUI extends UI {
 				Item itemId = pizzacontainer.addItem("1");
 				itemId.getItemProperty("pizzaname").setValue("Margherita");
 				itemId.getItemProperty("pizzaing").setValue("Sos pomidorowy, Ser, Oregano");
-				Button pricebutton = new Button("22.9", new PriceButtonListener(22.9));
+				Button pricebutton = new Button("22.9", new PriceButtonListener(new BigDecimal(22.9)));
 				itemId.getItemProperty("pizzaprice1").setValue(pricebutton);
-				pricebutton = new Button("27.9");
+				pricebutton = new Button("27.9", new PriceButtonListener(new BigDecimal(27.9)));
 				itemId.getItemProperty("pizzaprice2").setValue(pricebutton);
 				itemId = pizzacontainer.addItem("2");
 				itemId.getItemProperty("pizzaname").setValue("Soprano");
 				itemId.getItemProperty("pizzaing").setValue("Sos pomidorowy, Ser, Pieczarki");
-				pricebutton = new Button("24.9");
+				pricebutton = new Button("24.9", new PriceButtonListener(new BigDecimal(24.9)));
 				itemId.getItemProperty("pizzaprice1").setValue(pricebutton);
-				pricebutton = new Button("31.9");
+				pricebutton = new Button("31.9", new PriceButtonListener(new BigDecimal(31.9)));
 				itemId.getItemProperty("pizzaprice2").setValue(pricebutton);
 				itemId = pizzacontainer.addItem("3");
 				itemId.getItemProperty("pizzaname").setValue("Vesuvio");
 				itemId.getItemProperty("pizzaing").setValue("Sos pomidorowy, Ser, Szynka");
-				pricebutton = new Button("25.9");
+				pricebutton = new Button("25.9", new PriceButtonListener(new BigDecimal(25.9)));
 				itemId.getItemProperty("pizzaprice1").setValue(pricebutton);
-				pricebutton = new Button("33.9");
+				pricebutton = new Button("33.9", new PriceButtonListener(new BigDecimal(33.9)));
 				itemId.getItemProperty("pizzaprice2").setValue(pricebutton);
 				
 				pizzatable.setContainerDataSource(pizzacontainer);
 				pizzatable.setColumnHeaders(new String[] { "Nazwa", "Składniki", "Cena 40cm", "Cena 50cm" });
 				pizzatable.setPageLength(3);
 				LeftPanelContent.addComponent(pizzatable);
-				RightPanelContent.addComponent(new Label("Wartość zamówienia: " + OrderPrice));
+				RightPanelContent.addComponent(OrderPriceLabel);
 				return;
 			}
 			else if (event.getParameters().equals("orders")) {
