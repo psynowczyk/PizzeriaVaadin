@@ -2,52 +2,32 @@ package war;
 
 import java.math.BigDecimal;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.UUID;
+import java.util.List;
 
+import domain.Pizza;
 import domain.User;
 
 import javax.servlet.annotation.WebServlet;
-import javax.servlet.http.HttpSession;
 
-import org.bson.Document;
 import org.bson.types.ObjectId;
 
 import service.DBManager;
 
-import com.mongodb.BasicDBObject;
-import com.mongodb.DB;
-import com.mongodb.DBCollection;
-import com.mongodb.DBObject;
-import com.mongodb.MongoClient;
-import com.mongodb.client.FindIterable;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.MongoDatabase;
 import com.vaadin.annotations.PreserveOnRefresh;
 import com.vaadin.annotations.Theme;
 import com.vaadin.annotations.VaadinServletConfiguration;
 import com.vaadin.annotations.Widgetset;
-import com.vaadin.client.ui.Field;
 import com.vaadin.data.Container;
 import com.vaadin.data.Item;
-import com.vaadin.data.Property;
-import com.vaadin.data.Property.ValueChangeEvent;
-import com.vaadin.data.fieldgroup.BeanFieldGroup;
 import com.vaadin.data.fieldgroup.FieldGroup;
 import com.vaadin.data.fieldgroup.FieldGroup.CommitException;
 import com.vaadin.data.util.BeanItem;
-import com.vaadin.data.util.BeanItemContainer;
 import com.vaadin.data.util.IndexedContainer;
-import com.vaadin.data.util.ObjectProperty;
-import com.vaadin.data.util.PropertysetItem;
 import com.vaadin.data.validator.BeanValidator;
-import com.vaadin.event.FieldEvents.TextChangeEvent;
-import com.vaadin.event.FieldEvents.TextChangeListener;
 import com.vaadin.server.VaadinRequest;
 import com.vaadin.server.VaadinServlet;
-import com.vaadin.server.WrappedHttpSession;
-import com.vaadin.server.WrappedSession;
-import com.vaadin.ui.Alignment;
 import com.vaadin.ui.Button;
 import com.vaadin.ui.Button.ClickEvent;
 import com.vaadin.ui.Button.ClickListener;
@@ -57,7 +37,6 @@ import com.vaadin.ui.Label;
 import com.vaadin.ui.Notification;
 import com.vaadin.ui.Panel;
 import com.vaadin.ui.Table;
-import com.vaadin.ui.TextField;
 import com.vaadin.ui.UI;
 import com.vaadin.ui.VerticalLayout;
 import com.vaadin.navigator.Navigator;
@@ -72,54 +51,65 @@ import com.vaadin.navigator.ViewChangeListener.ViewChangeEvent;
 @PreserveOnRefresh
 public class MyUI extends UI {
 	Navigator navigator;
-	DBManager userManager = new DBManager();
+	DBManager dbManager = new DBManager();
+	
+	public static double round(double value, int places) {
+	    if (places < 0) throw new IllegalArgumentException();
+	    BigDecimal bd = new BigDecimal(value);
+	    bd = bd.setScale(places, BigDecimal.ROUND_HALF_UP);
+	    return bd.doubleValue();
+	}
 	
 	// Home view with a menu
 	public class HomeView extends VerticalLayout implements View {
-		Boolean loggedIn = false;
+		User loggedIn = new User();
 		Panel LeftPanel, RightPanel;
-		Button homebutton, orderbutton, ordersbutton, loginbutton, registerbutton;
-		BigDecimal OrderPrice = new BigDecimal(0.00);
+		HorizontalLayout menu;
+		Button orderbutton, ordersbutton, signupbutton, logoutbutton;
+		Double OrderPrice = new Double(0.00);
 		Label OrderPriceLabel = new Label("Wartość zamówienia: " + OrderPrice);
 		Container OrderContainer = new IndexedContainer();
 
 		// Menu navigation button listener
 		class ButtonListener implements Button.ClickListener {
 			String menuitem;
+			String action = "";
 			public ButtonListener(String menuitem) {this.menuitem = menuitem;}
-			@Override
-			public void buttonClick(ClickEvent event) {navigator.navigateTo("/" + menuitem);}
-		}
-		class PriceButtonListener implements Button.ClickListener {
-			BigDecimal price;
-			public PriceButtonListener(BigDecimal price) {this.price = price;}
+			public ButtonListener(String menuitem, String action) {
+				this.menuitem = menuitem;
+				this.action = action;
+			}
 			@Override
 			public void buttonClick(ClickEvent event) {
-				OrderPrice = OrderPrice.add(price).setScale(2, BigDecimal.ROUND_HALF_UP);
+				if (action.compareTo("logout") == 0) loggedIn = new User();
+				navigator.navigateTo("/" + menuitem);
+			}
+		}
+		class PriceButtonListener implements Button.ClickListener {
+			Pizza pizza;
+			int ver;
+			public PriceButtonListener(Pizza pizza, int ver) {
+				this.pizza = pizza;
+				this.ver = ver;
+			}
+			@Override
+			public void buttonClick(ClickEvent event) {
+				if (ver == 1) {
+					OrderPrice = round(OrderPrice + pizza.getPrice40(), 2);
+				}
+				else if (ver == 2) {
+					OrderPrice = round(OrderPrice + pizza.getPrice50(), 2);
+				}
 				OrderPriceLabel.setValue("Wartość zamówienia: " + OrderPrice);
 			}
 		}
 		public HomeView() {
 			setSizeFull();
-			// Layout with menu on top and view area on below
 			VerticalLayout vLayout = new VerticalLayout();
-			HorizontalLayout menu = new HorizontalLayout();
+			menu = new HorizontalLayout();
 			HorizontalLayout panels = new HorizontalLayout();
 			menu.setStyleName("main-menu");
-			if (!loggedIn) {		
-				loginbutton = new Button("Login", new ButtonListener("login"));
-				registerbutton = new Button("Register", new ButtonListener("register"));
-				menu.addComponent(loginbutton);
-				menu.addComponent(registerbutton);
-			}
-			else if (loggedIn) {
-				OrderContainer.addContainerProperty("pizzaname", String.class, "none");
-				OrderContainer.addContainerProperty("pizzaprice", Button.class, null);
-				orderbutton = new Button("Order", new ButtonListener("order"));
-				ordersbutton = new Button("Orders", new ButtonListener("orders"));
-				menu.addComponent(orderbutton);
-				menu.addComponent(ordersbutton);
-			}
+			
 			vLayout.addComponent(menu);
 			LeftPanel = new Panel("");
 			LeftPanel.setStyleName("left-panel");
@@ -138,59 +128,121 @@ public class MyUI extends UI {
 		
 		@Override
 		public void enter(ViewChangeEvent event) {
+			menu.removeAllComponents();
 			VerticalLayout LeftPanelContent = new VerticalLayout();
 			LeftPanelContent.setSizeFull();
 			LeftPanel.setContent(LeftPanelContent); // Also clears
 			VerticalLayout RightPanelContent = new VerticalLayout();
 			RightPanelContent.setSizeFull();
+			RightPanelContent.setMargin(true);
 			RightPanel.setContent(RightPanelContent); // Also clears
-			if (!loggedIn) {
+			if (loggedIn.getLogin().isEmpty()) {
+				Button loginbutton = new Button("Login", new ButtonListener("login"));
+				signupbutton = new Button("Sign up", new ButtonListener("signup"));
+				menu.addComponent(loginbutton);
+				menu.addComponent(signupbutton);
 				if (event.getParameters().equals("login")) {
-					LeftPanelContent.addComponent(new Label("LOGIN."));
-				}
-				else if (event.getParameters().equals("register")) {
+					loginbutton.setStyleName("active-button");
+					signupbutton.setStyleName("");
 					final BeanItem<User> userItem = new BeanItem<User>(new User());
 					final FormLayout form = new FormLayout();
 					final FieldGroup binder = new FieldGroup(userItem);
-					final Button saveBtn = new Button("Sign up!");
+					final Button saveBtn = new Button("Log in!");
 					
-					//form.setStyleName("signup-form");
+					form.setStyleName("signup-form");
 					form.addComponent(binder.buildAndBind("Login", "login"));
 					form.addComponent(binder.buildAndBind("Password", "password"));
+					form.addComponent(saveBtn);
 					binder.setBuffered(true);
 					binder.getField("login").setRequired(true);
 					binder.getField("login").addValidator(new BeanValidator(User.class, "login"));
 					binder.getField("password").setRequired(true);
 					binder.getField("password").addValidator(new BeanValidator(User.class, "password"));
 					LeftPanelContent.addComponent(form);
-					LeftPanelContent.addComponent(saveBtn);
+					RightPanelContent.addComponent(new Label("Witaj! Zaloguj się aby złożyć zamówienie."));
+					
 					saveBtn.addClickListener(new ClickListener() {
 						@Override
 						public void buttonClick(ClickEvent event) {
 							try {
 								binder.commit();
-								String newlogin = binder.getField("login").getValue().toString();
-								User userexists = new User();
+								User loginuser = new User();
+								loginuser.setLogin(binder.getField("login").getValue().toString());
+								loginuser.setPassword(binder.getField("password").getValue().toString());
 								try {
-									userexists = userManager.findUser(newlogin);
+									loginuser = dbManager.findUser(loginuser.getLogin(), loginuser.getPassword());
 								} catch (UnknownHostException e) {
 									e.printStackTrace();
 								}
-								if (userexists.getLogin().isEmpty()) {
-									userexists.set_id(new ObjectId());
-									userexists.setLogin(binder.getField("login").getValue().toString());
-									userexists.setPassword(binder.getField("password").getValue().toString());
-									try {
-										userManager.insertUser(userexists);
-										Notification.show("Success!", Notification.Type.TRAY_NOTIFICATION);
-									} catch (UnknownHostException e) {
-										e.printStackTrace();
+								if (!loginuser.getLogin().isEmpty()) {
+									loggedIn = loginuser;
+									navigator.navigateTo("/order");
+								}
+								else {
+									Notification.show("Wrong login or password!", Notification.Type.WARNING_MESSAGE);
+								}
+							}
+							catch (CommitException e) {
+								Notification.show("Please correct errors before commiting", Notification.Type.WARNING_MESSAGE);
+								e.printStackTrace();
+							}
+						}
+					});
+				}
+				else if (event.getParameters().equals("signup")) {
+					signupbutton.setStyleName("active-button");
+					loginbutton.setStyleName("");
+					final BeanItem<User> userItem = new BeanItem<User>(new User());
+					final FormLayout form = new FormLayout();
+					final FieldGroup binder = new FieldGroup(userItem);
+					final Button saveBtn = new Button("Sign up!");
+					
+					form.setStyleName("signup-form");
+					form.addComponent(binder.buildAndBind("Login", "login"));
+					form.addComponent(binder.buildAndBind("Password", "password"));
+					form.addComponent(binder.buildAndBind("Verify Password", "repassword"));
+					form.addComponent(saveBtn);
+					binder.setBuffered(true);
+					binder.getField("login").setRequired(true);
+					binder.getField("login").addValidator(new BeanValidator(User.class, "login"));
+					binder.getField("password").setRequired(true);
+					binder.getField("password").addValidator(new BeanValidator(User.class, "password"));
+					binder.getField("repassword").setRequired(true);
+					binder.getField("repassword").addValidator(new BeanValidator(User.class, "repassword"));
+					LeftPanelContent.addComponent(form);
+					saveBtn.addClickListener(new ClickListener() {
+						@Override
+						public void buttonClick(ClickEvent event) {
+							try {
+								binder.commit();
+								User newuser = new User();
+								newuser.setLogin(binder.getField("login").getValue().toString());
+								try {
+									newuser = dbManager.findUser(newuser.getLogin());
+								} catch (UnknownHostException e) {
+									e.printStackTrace();
+								}
+								if (newuser.getLogin().isEmpty()) {
+									newuser.setLogin(binder.getField("login").getValue().toString());
+									newuser.setPassword(binder.getField("password").getValue().toString());
+									newuser.setRepassword(binder.getField("repassword").getValue().toString());
+									if (newuser.getPassword().compareTo(newuser.getRepassword()) == 0) {
+										try {
+											dbManager.insertUser(newuser);
+											loggedIn = newuser;
+											navigator.navigateTo("/order");
+										} catch (UnknownHostException e) {
+											e.printStackTrace();
+										}
+									}
+									else {
+										Notification.show("Password fields must match!", Notification.Type.WARNING_MESSAGE);
 									}
 								}
 								else {
 									Notification.show("Login already taken!", Notification.Type.WARNING_MESSAGE);
 								}
-								close();
+								
 							}
 							catch (CommitException e) {
 								Notification.show("Please correct errors before commiting", Notification.Type.WARNING_MESSAGE);
@@ -201,57 +253,73 @@ public class MyUI extends UI {
 				}
 				else {navigator.navigateTo("/login");}
 			}
-			else if (loggedIn) {
+			else if (!loggedIn.getLogin().isEmpty() && loggedIn.getUseable() == true) {
+				try {
+					loggedIn = dbManager.findUser(loggedIn.getLogin());
+				} catch (UnknownHostException e1) {
+					e1.printStackTrace();
+				}
+				OrderContainer.addContainerProperty("pizzaname", String.class, "none");
+				OrderContainer.addContainerProperty("pizzaprice", Button.class, null);
+				orderbutton = new Button("Order", new ButtonListener("order"));
+				ordersbutton = new Button("Orders", new ButtonListener("orders"));
+				logoutbutton = new Button("Logout", new ButtonListener("login", "logout"));
+				menu.addComponent(orderbutton);
+				menu.addComponent(logoutbutton);
+				if (loggedIn.getType().compareTo("admin") == 0) {
+					menu.addComponent(ordersbutton);
+				}
 				if (event.getParameters().equals("order")) {
 					orderbutton.setStyleName("active-button");
-					homebutton.setStyleName("");
 					ordersbutton.setStyleName("");
 					
 					Container pizzacontainer = new IndexedContainer();
 					pizzacontainer.addContainerProperty("pizzaname", String.class, "none");
 					pizzacontainer.addContainerProperty("pizzaing", String.class, "none");
-					pizzacontainer.addContainerProperty("pizzaprice1", Button.class, null);
-					pizzacontainer.addContainerProperty("pizzaprice2", Button.class, null);
+					pizzacontainer.addContainerProperty("pizzaprice40", Button.class, null);
+					pizzacontainer.addContainerProperty("pizzaprice50", Button.class, null);
 					Table pizzatable = new Table();
 					pizzatable.setSizeFull();
 					
-					Item itemId = pizzacontainer.addItem("1");
-					itemId.getItemProperty("pizzaname").setValue("Margherita");
-					itemId.getItemProperty("pizzaing").setValue("Sos pomidorowy, Ser, Oregano");
-					Button pricebutton = new Button("22.9", new PriceButtonListener(new BigDecimal(22.9)));
-					itemId.getItemProperty("pizzaprice1").setValue(pricebutton);
-					pricebutton = new Button("27.9", new PriceButtonListener(new BigDecimal(27.9)));
-					itemId.getItemProperty("pizzaprice2").setValue(pricebutton);
-					itemId = pizzacontainer.addItem("2");
-					itemId.getItemProperty("pizzaname").setValue("Soprano");
-					itemId.getItemProperty("pizzaing").setValue("Sos pomidorowy, Ser, Pieczarki");
-					pricebutton = new Button("24.9", new PriceButtonListener(new BigDecimal(24.9)));
-					itemId.getItemProperty("pizzaprice1").setValue(pricebutton);
-					pricebutton = new Button("31.9", new PriceButtonListener(new BigDecimal(31.9)));
-					itemId.getItemProperty("pizzaprice2").setValue(pricebutton);
-					itemId = pizzacontainer.addItem("3");
-					itemId.getItemProperty("pizzaname").setValue("Vesuvio");
-					itemId.getItemProperty("pizzaing").setValue("Sos pomidorowy, Ser, Szynka");
-					pricebutton = new Button("25.9", new PriceButtonListener(new BigDecimal(25.9)));
-					itemId.getItemProperty("pizzaprice1").setValue(pricebutton);
-					pricebutton = new Button("33.9", new PriceButtonListener(new BigDecimal(33.9)));
-					itemId.getItemProperty("pizzaprice2").setValue(pricebutton);
+					List<Pizza> pizzas = new ArrayList<Pizza>();
+					try {
+						pizzas = dbManager.findPizzas();
+					} catch (UnknownHostException e) {
+						e.printStackTrace();
+					}
+					
+					Item itemId;
+					Button pricebutton;
+					int i = 0;
+					while (i < pizzas.size()) {
+						itemId = pizzacontainer.addItem(i+1);
+						itemId.getItemProperty("pizzaname").setValue(pizzas.get(i).getName());
+						itemId.getItemProperty("pizzaing").setValue(pizzas.get(i).getIngredients());
+						pricebutton = new Button(pizzas.get(i).getPrice40().toString(), new PriceButtonListener(pizzas.get(i), 1));
+						itemId.getItemProperty("pizzaprice40").setValue(pricebutton);
+						pricebutton = new Button(pizzas.get(i).getPrice50().toString(), new PriceButtonListener(pizzas.get(i), 2));
+						itemId.getItemProperty("pizzaprice50").setValue(pricebutton);
+						//cursor.next();
+						i++;
+					}
+					pizzatable.setPageLength(i);
 					
 					pizzatable.setContainerDataSource(pizzacontainer);
 					pizzatable.setColumnHeaders(new String[] { "Nazwa", "Składniki", "Cena 40cm", "Cena 50cm" });
-					pizzatable.setPageLength(3);
 					LeftPanelContent.addComponent(pizzatable);
 					RightPanelContent.addComponent(OrderPriceLabel);
 					return;
 				}
-				else if (event.getParameters().equals("orders")) {
+				else if (event.getParameters().equals("orders") && loggedIn.getType().compareTo("admin") == 0) {
 					ordersbutton.setStyleName("active-button");
-					homebutton.setStyleName("");
 					orderbutton.setStyleName("");
 					LeftPanelContent.addComponent(new Label("orders."));
 					return;
 				}
 				else {navigator.navigateTo("/order");}
+			}
+			else if (loggedIn.getUseable() == false) {
+				Notification.show("Your account has beed banned!", Notification.Type.ERROR_MESSAGE);
 			}
 		}
 	}
