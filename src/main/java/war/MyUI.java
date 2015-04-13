@@ -12,8 +12,10 @@ import domain.User;
 import javax.servlet.annotation.WebServlet;
 
 import service.DBManager;
+import service.Broadcaster;
 
 import com.vaadin.annotations.PreserveOnRefresh;
+import com.vaadin.annotations.Push;
 import com.vaadin.annotations.Theme;
 import com.vaadin.annotations.VaadinServletConfiguration;
 import com.vaadin.annotations.Widgetset;
@@ -43,11 +45,14 @@ import com.vaadin.navigator.ViewChangeListener.ViewChangeEvent;
 
 @Theme("mytheme")
 @Widgetset("war.MyAppWidgetset")
+@Push
 @PreserveOnRefresh
-public class MyUI extends UI {
+public class MyUI extends UI implements Broadcaster.BroadcastListener {
 	private static final long serialVersionUID = 1L;
 	Navigator navigator;
 	DBManager dbManager = new DBManager();
+	Panel LeftPanel, RightPanel;
+	VerticalLayout AdminContent = new VerticalLayout();
 	
 	public static double round(double value, int places) {
 	    if (places < 0) throw new IllegalArgumentException();
@@ -60,7 +65,6 @@ public class MyUI extends UI {
 	public class HomeView extends VerticalLayout implements View {
 		private static final long serialVersionUID = 1L;
 		User loggedIn = new User();
-		Panel LeftPanel, RightPanel;
 		HorizontalLayout menu;
 		Button orderbutton, ordersbutton, signupbutton, logoutbutton;
 		Order UserOrder = new Order();
@@ -112,14 +116,6 @@ public class MyUI extends UI {
 						itemId.getItemProperty("amount").setValue(new Button(UserOrder.getOrder().get(x).getAmount().toString(), new OrderButtonListener(UserOrder.getOrder().get(x), x)));
 					}
 					ordertable.setPageLength(ordercontainer.size());
-					/*
-					if (UserOrder.getOrder().size() > 1) {
-						for (int x = index+1; x < ordercontainer.size(); x++) {
-							Item itemId2 = ordercontainer.getItem(x);
-							itemId2.getItemProperty("amount").setValue(new Button(UserOrder.getOrder().get(x).getAmount().toString(), new OrderButtonListener(UserOrder.getOrder().get(x), x-1)));
-						}
-					}
-					*/
 				}
 				else {
 					UserOrder.getOrder().get(index).setAmount(newAmount);
@@ -186,6 +182,14 @@ public class MyUI extends UI {
 					UserOrder.setOrderPrice(round(UserOrder.getOrderPrice() + pizza.getPrice50(), 2));
 				}
 				OrderPriceLabel.setValue("Wartość zamówienia: " + UserOrder.getOrderPrice());
+			}
+		}
+		
+		class ExecuteOrderListener implements Button.ClickListener {
+			
+			@Override
+			public void buttonClick(ClickEvent event) {
+				Broadcaster.broadcast(UserOrder);
 			}
 		}
 		
@@ -414,18 +418,23 @@ public class MyUI extends UI {
 					}
 					pizzatable.setPageLength(i);
 					
+					Button executeOrder = new Button("Zamów", new ExecuteOrderListener());
+					
 					pizzatable.setContainerDataSource(pizzacontainer);
 					pizzatable.setColumnHeaders(new String[] { "Nazwa", "Składniki", "Cena 40cm", "Cena 50cm" });
 					LeftPanelContent.addComponent(pizzatable);
 					RightPanelContent.addComponent(ordertable);
 					RightPanelContent.addComponent(OrderPriceLabel);
+					RightPanelContent.addComponent(executeOrder);
 					return;
 				}
 				// ~ORDERS
 				else if (event.getParameters().equals("orders") && loggedIn.getType().compareTo("admin") == 0) {
 					ordersbutton.setStyleName("active-button");
 					orderbutton.setStyleName("");
-					LeftPanelContent.addComponent(new Label("orders."));
+					AdminContent.setSizeFull();
+					LeftPanel.setContent(AdminContent);
+					//LeftPanelContent.addComponent(new Label("orders."));
 					return;
 				}
 				// ~WRONG ADRESS
@@ -441,11 +450,65 @@ public class MyUI extends UI {
 	@Override
 	protected void init(VaadinRequest vaadinRequest) {
 		//WrappedSession session = vaadinRequest.getWrappedSession();
-	   // HttpSession httpSession = ((WrappedHttpSession) vaadinRequest).getHttpSession();
+		//HttpSession httpSession = ((WrappedHttpSession) vaadinRequest).getHttpSession();
 		getPage().setTitle("Pizzeria Vaadin");
 		navigator = new Navigator(this, this);
     	navigator.addView("", new HomeView());
+    	new FeederThread().start();
+    	Broadcaster.register(this);
    }
+	
+	@Override
+    public void detach() {
+        Broadcaster.unregister(this);
+        super.detach();
+    }
+	
+	@Override
+	public void receiveBroadcast(final Order order) {
+		access(new Runnable() {
+            @Override
+            public void run() {
+            	Item itemId;
+            	Table pizzatable = new Table();
+				pizzatable.setSizeFull();
+				Container orderscontainer = new IndexedContainer();
+				orderscontainer.addContainerProperty("owner", String.class, "none");
+				orderscontainer.addContainerProperty("pizzaname", String.class, "");
+				orderscontainer.addContainerProperty("pizzasize", String.class, "");
+				int i = 0;
+				while (i < order.getOrder().size()) {
+					itemId = orderscontainer.addItem(i);
+					itemId.getItemProperty("owner").setValue(order.getOwner().toString());
+					itemId.getItemProperty("pizzaname").setValue(order.getOrder().get(i).getName());
+					if (order.getOrder().get(i).getVer() == 1) itemId.getItemProperty("pizzasize").setValue("40cm");
+					else if (order.getOrder().get(i).getVer() == 2) itemId.getItemProperty("pizzasize").setValue("50cm");
+					i++;
+				}
+				pizzatable.setPageLength(i);
+				pizzatable.setContainerDataSource(orderscontainer);
+				pizzatable.setColumnHeaders(new String[] { "Klient", "Pizza", "Rozmiar" });
+				AdminContent.addComponent(pizzatable);
+            }
+        });
+	}
+	
+	class FeederThread extends Thread {
+	    int count = 0;
+	    
+	    @Override
+	    public void run() {
+	    	try {
+	    		Thread.sleep(1000);
+	    	} catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+	    	access(new Runnable() {
+	            @Override
+	            public void run() {}
+            });
+	    }
+	}
 
    @WebServlet(urlPatterns = "/*", name = "MyUIServlet", asyncSupported = true)
    @VaadinServletConfiguration(ui = MyUI.class, productionMode = false)
