@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.bson.types.ObjectId;
 
+import com.mongodb.BasicDBList;
 import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
@@ -13,6 +14,7 @@ import com.mongodb.MongoClient;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
 
+import domain.Order;
 import domain.Pizza;
 import domain.User;
 
@@ -41,15 +43,16 @@ public class DBManager {
 	}
 	
 	// find user by login
-	public User findUser(String login) throws UnknownHostException {
+	public User findUser(User userfound) throws UnknownHostException {
 		DB db = connect();
-		User userfound  = new User();
 		DBCollection coll = db.getCollection("users");
 		BasicDBObject query = new BasicDBObject();
-		query.put("login", login);
+		query.put("login", userfound.getLogin());
+		userfound.setLogin("");
 		DBCursor cursor = coll.find(query).limit(1);
 		while (cursor.hasNext()) {
 			cursor.next();
+			userfound.set_id((ObjectId)cursor.curr().get("_id"));
 			userfound.setLogin((String)cursor.curr().get("login"));
 			userfound.setPassword((String)cursor.curr().get("password"));
 			userfound.setRepassword((String)cursor.curr().get("repassword"));
@@ -100,5 +103,35 @@ public class DBManager {
 		}
 		cursor.close();
 		return pizzas;
+	}
+	
+	// find order by owner and status
+	public Order findOrder(Order order) throws UnknownHostException {
+		DB db = connect();
+		DBCollection coll = db.getCollection("orders");
+		BasicDBObject query = new BasicDBObject();
+		query.put("owner", order.getOwner());
+		query.put("status", order.getStatus());
+		DBCursor cursor = coll.find(query);
+		while (cursor.hasNext()) {
+			cursor.next();
+			order.set_id((ObjectId)cursor.curr().get("_id"));
+			order.setOrder((List<Pizza>)cursor.curr().get("order"));
+		}
+		cursor.close();
+		return order;
+	}
+	
+	// upsert order
+	public void upsertOrder(Order order) throws UnknownHostException {
+		DB db = connect();
+		DBCollection coll = db.getCollection("orders");
+		BasicDBObject query = new BasicDBObject();
+		query.put("owner", order.getOwner());
+		query.put("status", order.getStatus());
+		BasicDBObject newDocument = new BasicDBObject();
+		
+		newDocument.append("$set", new BasicDBObject().append("order", order.getOrder()));
+		coll.update(query, newDocument, true, false);
 	}
 }

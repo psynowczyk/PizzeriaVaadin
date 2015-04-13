@@ -1,14 +1,21 @@
 package domain;
 
+import java.io.Serializable;
+
 import org.bson.types.ObjectId;
 
-public class Pizza {
+import com.mongodb.BasicDBObject;
+
+public class Pizza extends BasicDBObject implements Serializable {
 	
+	private static final long serialVersionUID = 1L;
 	private ObjectId _id;
 	private String name = "";
 	private String ingredients = "";
 	private Double price40 = 0.00;
 	private Double price50 = 0.00;
+	private Integer ver = 1;
+	private Integer amount = 1;
 	
 	public Pizza() {
 		super();
@@ -44,5 +51,16 @@ public class Pizza {
 	public void setPrice50(Double price50) {
 		this.price50 = price50;
 	}
-	
+	public Integer getVer() {
+		return ver;
+	}
+	public void setVer(Integer ver) {
+		this.ver = ver;
+	}
+	public Integer getAmount() {
+		return amount;
+	}
+	public void setAmount(Integer amount) {
+		this.amount = amount;
+	}
 }
